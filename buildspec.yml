@@ -1,0 +1,47 @@
+version: 0.2
+
+env:
+  variables:
+    ECR_REPOSITORY: "justdemo"
+    IMAGE_NAME: "justdemo"
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+
+  pre_build:
+    commands:
+      - echo "Resolving account ID and region..."
+      - AWS_REGION="${AWS_REGION:-$AWS_DEFAULT_REGION}"
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
+      - 'echo "Region: ${AWS_REGION}, Account: ${AWS_ACCOUNT_ID}"'
+      - echo "Logging into Amazon ECR..."
+      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+      - IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
+      - echo "Using image tag ${IMAGE_TAG}"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+      - echo "Tagging Docker image..."
+      - docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+      - docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_URI}:latest
+
+  post_build:
+    commands:
+      - echo "Pushing image to ECR..."
+      - docker push ${ECR_URI}:${IMAGE_TAG}
+      - docker push ${ECR_URI}:latest
+      - echo "Docker image pushed successfully:"
+      - echo "${ECR_URI}:${IMAGE_TAG}"
+      - printf '[{"name":"%s","imageUri":"%s"}]' "${ECR_REPOSITORY}" "${ECR_URI}:${IMAGE_TAG}" > imagedefinitions.json
+
+artifacts:
+  files:
+    - appspec.yml
+    - scripts/**/*
+    - docker-compose.yml
+    - imagedefinitions.json

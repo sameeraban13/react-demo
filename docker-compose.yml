@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  app:
+    image: ${ECR_URI}:${IMAGE_TAG}
+    container_name: justdemo-app
+    restart: unless-stopped
+    ports:
+      - "80:3000"     # <-- change 3000 to whatever port your app listens on inside the container
+    env_file:
+      - .env
